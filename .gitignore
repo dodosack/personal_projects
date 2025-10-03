@@ -12,7 +12,7 @@ database-group-check/*.pyc
 
 # IDE-spezifische Einstellungen (z.B. von PyCharm)
 database-group-check/.idea/
-database-group-check/.idea/*
+.idea
 
 # Sensible Dateien
 # WICHTIG: Verhindert, dass Passwörter, API-Keys oder Cookies hochgeladen werden
