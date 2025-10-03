@@ -24,7 +24,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 DATA_FILE = "moodle_gruppen.json"
-CHECK_INTERVAL = 20  # Prüfintervall in Sekunden (5 Minuten)
+CHECK_INTERVAL = 20  # Prüfintervall in Sekunden s
 
 
 # =======================================================
