@@ -6,5 +6,5 @@ install requirments.txt, add telegram chat id / api key, download cookies as jso
 
 2______2
 randomises the mac-address on the interface
-
+activate the skript before conection to not expose your mac-addres with -c "wifi-ssid "
 
