@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# mac-random-toggle.sh (verbessert, finale Version)
+# mac-random-toggle.sh (verbessert, finale Version mit MAC-Vergleich vor/nach)
 # CLI: up | down | status | test
 #  - erkennt automatisch aktive WLAN-Verbindungen (auch bei VPN)
 #  - zeigt aktuelle MAC-Adresse (Hardware und aktiv)
 #  - farbige Ausgaben mit Statusmeldungen
+#  - zeigt beim Before die aktuelle MAC zur direkten Vergleichbarkeit
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -76,39 +77,52 @@ get_hw_mac(){ local iface="$1"; nmcli -f GENERAL.HWADDR device show "$iface" 2>/
 set_property(){ local conn="$1" prop="$2" val="$3"; echo -e "Setting ${BOLD}${prop}=${val}${RESET} for ${GREEN}${conn}${RESET}"; run_cmd nmcli connection modify "$conn" "$prop" "$val"; }
 reconnect_conn(){ local conn="$1"; echo -e "Reconnecting ${GREEN}${conn}${RESET}..."; run_cmd nmcli connection down "$conn" || true; run_cmd nmcli connection up "$conn"; }
 
-action_up(){ local conns=$(get_target_connections); [[ -z "$conns" ]] && { echo -e "${RED}No Wi-Fi connection found${RESET}"; exit 1; }
+action_up(){ 
+  local conns=$(get_target_connections)
+  [[ -z "$conns" ]] && { echo -e "${RED}No Wi-Fi connection found${RESET}"; exit 1; }
   for c in $conns; do
-    local iface=$(get_iface "$c"); echo "--- ${BOLD}$c${RESET} (${iface}) ---"
-    local before=$(get_property "$c")
-    echo "Before: cloned-mac = ${before:-(unset)}"
+    local iface=$(get_iface "$c")
+    echo "--- ${BOLD}$c${RESET} (${iface}) ---"
+    local before_prop=$(get_property "$c")
+    local before_mac=$(get_current_mac "$iface")
+    echo "Before: cloned-mac = ${before_prop:-(unset)} | Current MAC = ${before_mac}"
     set_property "$c" wifi.cloned-mac-address random
     reconnect_conn "$c"
-    local after=$(get_property "$c")
+    local after_prop=$(get_property "$c")
     local cur_mac=$(get_current_mac "$iface")
     local hw_mac=$(get_hw_mac "$iface")
-    echo -e "After: cloned-mac = ${after:-(unset)}"
+    echo -e "After: cloned-mac = ${after_prop:-(unset)}"
     echo -e "Current MAC: ${GREEN}$cur_mac${RESET} | HW MAC: ${YELLOW}$hw_mac${RESET}\n"
   done
 }
 
-action_down(){ local conns=$(get_target_connections); [[ -z "$conns" ]] && { echo -e "${RED}No Wi-Fi connection found${RESET}"; exit 1; }
+action_down(){ 
+  local conns=$(get_target_connections)
+  [[ -z "$conns" ]] && { echo -e "${RED}No Wi-Fi connection found${RESET}"; exit 1; }
   for c in $conns; do
-    local iface=$(get_iface "$c"); echo "--- ${BOLD}$c${RESET} (${iface}) ---"
-    local before=$(get_property "$c")
-    echo "Before: cloned-mac = ${before:-(unset)}"
+    local iface=$(get_iface "$c")
+    echo "--- ${BOLD}$c${RESET} (${iface}) ---"
+    local before_prop=$(get_property "$c")
+    local before_mac=$(get_current_mac "$iface")
+    echo "Before: cloned-mac = ${before_prop:-(unset)} | Current MAC = ${before_mac}"
     set_property "$c" wifi.cloned-mac-address preserve
     reconnect_conn "$c"
-    local after=$(get_property "$c")
+    local after_prop=$(get_property "$c")
     local cur_mac=$(get_current_mac "$iface")
     local hw_mac=$(get_hw_mac "$iface")
-    echo -e "After: cloned-mac = ${after:-(unset)}"
+    echo -e "After: cloned-mac = ${after_prop:-(unset)}"
     echo -e "Current MAC: ${GREEN}$cur_mac${RESET} | HW MAC: ${YELLOW}$hw_mac${RESET}\n"
   done
 }
 
-action_status(){ local conns=$(get_target_connections); [[ -z "$conns" ]] && { echo -e "${YELLOW}No Wi-Fi connection found${RESET}"; exit 0; }
+action_status(){ 
+  local conns=$(get_target_connections)
+  [[ -z "$conns" ]] && { echo -e "${YELLOW}No Wi-Fi connection found${RESET}"; exit 0; }
   for c in $conns; do
-    local iface=$(get_iface "$c"); local val=$(get_property "$c"); local cur_mac=$(get_current_mac "$iface"); local hw_mac=$(get_hw_mac "$iface")
+    local iface=$(get_iface "$c")
+    local val=$(get_property "$c")
+    local cur_mac=$(get_current_mac "$iface")
+    local hw_mac=$(get_hw_mac "$iface")
     echo -e "--- ${BOLD}$c${RESET} (${iface}) ---"
     echo -e "wifi.cloned-mac-address = ${val:-(unset)}"
     echo -e "Current MAC: ${GREEN}$cur_mac${RESET} | HW MAC: ${YELLOW}$hw_mac${RESET}\n"
