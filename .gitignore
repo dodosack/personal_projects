@@ -20,3 +20,5 @@ database-group-check/.env
 database-group-check/cookies.json
 
 database-group-check/moodle_gruppen.json
+.env
+.venv
