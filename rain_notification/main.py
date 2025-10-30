@@ -11,6 +11,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEATHER_API_KEY = os.getenv("WEATHER_API_KEY")
 LOCATION = os.getenv("Q")
+# \\ escape coordinates with [.]
 
 
 # --- 2. Telegram Sende-Funktion (Robust, mit MarkdownV2) ---
@@ -154,3 +155,5 @@ if __name__ == "__main__":
         send_telegram_message(f"🚨 Bot\\-Fehler: Wetter\\-API\\-Abruf für {LOCATION} ist fehlgeschlagen\\.")
 
     print("Wetter-Bot beendet.")
+
+
