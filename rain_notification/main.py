@@ -71,7 +71,7 @@ def send_telegram_message(message_text, retries=3, delay=1):
 # (Diese Funktion bleibt exakt gleich wie in deinem Code)
 def get_weather_forecast(location):
     """
-    Fragt die WeatherAPI nach der Vorhersage für einen Ort ab.
+    Fragt die WeatherAPI nach der Vorhersage für einen Ort ab.2
     Gibt die JSON-Antwort als Python-Dictionary zurück.
     """
     base_url = "https://api.weatherapi.com/v1/forecast.json"
