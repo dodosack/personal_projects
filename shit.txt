@@ -1,0 +1,516 @@
+#!/usr/bin/env python3
+"""
+🔨 Hammerschlag-Messsystem GUI - LabVIEW Style
+===============================================
+GUI-Aufbau OHNE Logik - nur Struktur und Plots
+
+Struktur:
+---------
+Links:  Parameter (wie LabVIEW)
+Rechts: 6 Plots
+"""
+
+import sys
+import numpy as np
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QLabel, QLineEdit, QComboBox, QDoubleSpinBox,
+    QSpinBox, QGroupBox, QFormLayout, QGridLayout, QSplitter,
+    QTabWidget, QFileDialog
+)
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+
+
+# ============================================================================
+# MATPLOTLIB CANVAS
+# ============================================================================
+
+class MplCanvas(FigureCanvasQTAgg):
+    """Matplotlib Canvas für Plots"""
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super().__init__(self.fig)
+        self.setParent(parent)
+
+
+# ============================================================================
+# HAUPT-GUI
+# ============================================================================
+
+class HammerLabViewGUI(QMainWindow):
+    """
+    LabVIEW-Style GUI für Hammerschlag-Messungen
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+        self.setWindowTitle("🔨 Hammerschlag-Messsystem - LabVIEW Style")
+        self.resize(1800, 1000)
+        
+        # Zentral-Widget
+        central = QWidget()
+        self.setCentralWidget(central)
+        main_layout = QHBoxLayout(central)
+        
+        # Splitter (Links: Parameter, Rechts: Plots)
+        splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(splitter)
+        
+        # === LINKE SEITE: PARAMETER ===
+        left_widget = self.create_parameter_panel()
+        splitter.addWidget(left_widget)
+        
+        # === RECHTE SEITE: PLOTS ===
+        right_widget = self.create_plot_panel()
+        splitter.addWidget(right_widget)
+        
+        # Splitter-Verhältnis: 1:3 (Parameter:Plots)
+        splitter.setStretchFactor(0, 1)
+        splitter.setStretchFactor(1, 3)
+        
+        print("✅ GUI initialisiert (nur Struktur, keine Logik)")
+    
+    # ========================================================================
+    # PARAMETER-PANEL (LINKS)
+    # ========================================================================
+    
+    def create_parameter_panel(self):
+        """Erstellt linkes Parameter-Panel wie LabVIEW"""
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("⚙️ Messparameter")
+        header.setFont(QFont("Arial", 14, QFont.Bold))
+        header.setStyleSheet("color: #2196F3; padding: 10px;")
+        layout.addWidget(header)
+        
+        # === BLOCK 1: Messung & Datei ===
+        group1 = QGroupBox("📁 Messung & Datei")
+        form1 = QFormLayout()
+        
+        # Messungsname
+        self.edit_name = QLineEdit("Messung_001")
+        form1.addRow("Messungsname:", self.edit_name)
+        
+        # Sensitivität
+        self.spin_sensitivity = QDoubleSpinBox()
+        self.spin_sensitivity.setRange(0.001, 1.0)
+        self.spin_sensitivity.setValue(0.05)
+        self.spin_sensitivity.setDecimals(3)
+        self.spin_sensitivity.setSuffix(" V/g")
+        form1.addRow("Sensitivität:", self.spin_sensitivity)
+        
+        # Dateipfad
+        path_layout = QHBoxLayout()
+        self.edit_path = QLineEdit("./measurements")
+        btn_browse = QPushButton("📂")
+        btn_browse.setMaximumWidth(40)
+        btn_browse.clicked.connect(self.browse_path)
+        path_layout.addWidget(self.edit_path)
+        path_layout.addWidget(btn_browse)
+        form1.addRow("Dateipfad:", path_layout)
+        
+        group1.setLayout(form1)
+        layout.addWidget(group1)
+        
+        # === BLOCK 2: Hardware & Kanäle ===
+        group2 = QGroupBox("🔌 Hardware & Kanäle")
+        form2 = QFormLayout()
+        
+        # Channels (Dev1/ai0, ai1, ai2, ai3)
+        self.edit_channels = QLineEdit("Dev1/ai0, Dev1/ai1, Dev1/ai2, Dev1/ai3")
+        form2.addRow("Channels:", self.edit_channels)
+        
+        # Scan Rate
+        self.spin_scanrate = QSpinBox()
+        self.spin_scanrate.setRange(1000, 100000)
+        self.spin_scanrate.setValue(51200)
+        self.spin_scanrate.setSingleStep(1000)
+        self.spin_scanrate.setSuffix(" Hz")
+        form2.addRow("Scan Rate:", self.spin_scanrate)
+        
+        # Number of Scans to Acquire
+        self.spin_nscans = QSpinBox()
+        self.spin_nscans.setRange(100, 100000)
+        self.spin_nscans.setValue(1000)
+        self.spin_nscans.setSuffix(" Scans")
+        form2.addRow("Number of Scans:", self.spin_nscans)
+        
+        # Sample Mode
+        self.combo_samplemode = QComboBox()
+        self.combo_samplemode.addItems(["Continuous", "Finite", "Hardware Timed"])
+        form2.addRow("Sample Mode:", self.combo_samplemode)
+        
+        # Sensorabstand Vertikal
+        self.spin_dist_vert = QDoubleSpinBox()
+        self.spin_dist_vert.setRange(0.0, 1000.0)
+        self.spin_dist_vert.setValue(100.0)
+        self.spin_dist_vert.setSuffix(" mm")
+        form2.addRow("Sensorabstand Vert.:", self.spin_dist_vert)
+        
+        # Sensorabstand Horizontal
+        self.spin_dist_horiz = QDoubleSpinBox()
+        self.spin_dist_horiz.setRange(0.0, 1000.0)
+        self.spin_dist_horiz.setValue(150.0)
+        self.spin_dist_horiz.setSuffix(" mm")
+        form2.addRow("Sensorabstand Horiz.:", self.spin_dist_horiz)
+        
+        # Coupling
+        self.combo_coupling = QComboBox()
+        self.combo_coupling.addItems(["AC", "DC"])
+        self.combo_coupling.setCurrentText("AC")
+        form2.addRow("Coupling:", self.combo_coupling)
+        
+        # Terminal Config
+        self.combo_terminal = QComboBox()
+        self.combo_terminal.addItems([
+            "Pseudo-Differential",
+            "Differential",
+            "RSE (Referenced Single-Ended)",
+            "NRSE (Non-Referenced Single-Ended)"
+        ])
+        self.combo_terminal.setCurrentText("Pseudo-Differential")
+        form2.addRow("Terminal Config:", self.combo_terminal)
+        
+        # Time Limit
+        self.spin_timelimit = QDoubleSpinBox()
+        self.spin_timelimit.setRange(1.0, 600.0)
+        self.spin_timelimit.setValue(120.0)
+        self.spin_timelimit.setSuffix(" s")
+        form2.addRow("Time Limit:", self.spin_timelimit)
+        
+        group2.setLayout(form2)
+        layout.addWidget(group2)
+        
+        # === BLOCK 3: Steuerung ===
+        group3 = QGroupBox("▶️ Steuerung")
+        vbox3 = QVBoxLayout()
+        
+        # Start Button
+        self.btn_start = QPushButton("▶ Messung starten")
+        self.btn_start.setStyleSheet(
+            "background: #4CAF50; color: white; font-weight: bold; "
+            "padding: 15px; font-size: 14pt;"
+        )
+        self.btn_start.clicked.connect(self.start_measurement)
+        vbox3.addWidget(self.btn_start)
+        
+        # Stop Button
+        self.btn_stop = QPushButton("⏹ Messung stoppen")
+        self.btn_stop.setStyleSheet(
+            "background: #f44336; color: white; font-weight: bold; "
+            "padding: 15px; font-size: 14pt;"
+        )
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.clicked.connect(self.stop_measurement)
+        vbox3.addWidget(self.btn_stop)
+        
+        # Status Label
+        self.label_status = QLabel("⚪ Bereit")
+        self.label_status.setAlignment(Qt.AlignCenter)
+        self.label_status.setStyleSheet(
+            "background: #f0f0f0; padding: 10px; "
+            "border-radius: 5px; font-size: 12pt; font-weight: bold;"
+        )
+        vbox3.addWidget(self.label_status)
+        
+        group3.setLayout(vbox3)
+        layout.addWidget(group3)
+        
+        # Stretch am Ende
+        layout.addStretch()
+        
+        return widget
+    
+    # ========================================================================
+    # PLOT-PANEL (RECHTS)
+    # ========================================================================
+    
+    def create_plot_panel(self):
+        """Erstellt rechtes Plot-Panel mit 6 Plots"""
+        
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Header
+        header = QLabel("📊 Messungen & Plots")
+        header.setFont(QFont("Arial", 14, QFont.Bold))
+        header.setStyleSheet("color: #2196F3; padding: 10px;")
+        layout.addWidget(header)
+        
+        # Grid Layout für 6 Plots (3x2)
+        plot_layout = QGridLayout()
+        
+        # === PLOT 1: Eingang A/D (alle 4 Kanäle) ===
+        self.canvas_eingang = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_eingang.axes.set_title("Eingang A/D (Hammer + Acc 1-3)", fontweight='bold')
+        self.canvas_eingang.axes.set_xlabel("Zeit [s]")
+        self.canvas_eingang.axes.set_ylabel("Amplitude")
+        self.canvas_eingang.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_eingang, 0, 0)
+        
+        # === PLOT 2: Kohärenz (Acc 1-3) ===
+        self.canvas_coherence = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_coherence.axes.set_title("Kohärenz (Acc 1-3)", fontweight='bold')
+        self.canvas_coherence.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_coherence.axes.set_ylabel("Kohärenz")
+        self.canvas_coherence.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_coherence, 0, 1)
+        
+        # === PLOT 3: Übertragungsfunktion g/N (Acc 1-3) ===
+        self.canvas_frf = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_frf.axes.set_title("Übertragungsfunktion g/N (Acc 1-3)", fontweight='bold')
+        self.canvas_frf.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_frf.axes.set_ylabel("FRF [g/N]")
+        self.canvas_frf.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_frf, 1, 0)
+        
+        # === PLOT 4: Relativer Kippwinkel ===
+        self.canvas_kippwinkel = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_kippwinkel.axes.set_title("Relativer Kippwinkel", fontweight='bold')
+        self.canvas_kippwinkel.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_kippwinkel.axes.set_ylabel("Winkel [°]")
+        self.canvas_kippwinkel.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_kippwinkel, 1, 1)
+        
+        # === PLOT 5: Amplitude ===
+        self.canvas_amplitude = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_amplitude.axes.set_title("Amplitude", fontweight='bold')
+        self.canvas_amplitude.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_amplitude.axes.set_ylabel("Amplitude")
+        self.canvas_amplitude.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_amplitude, 2, 0)
+        
+        # === PLOT 6: Phase ===
+        self.canvas_phase = MplCanvas(self, width=6, height=4, dpi=100)
+        self.canvas_phase.axes.set_title("Phase", fontweight='bold')
+        self.canvas_phase.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_phase.axes.set_ylabel("Phase [°]")
+        self.canvas_phase.axes.grid(True, alpha=0.3)
+        plot_layout.addWidget(self.canvas_phase, 2, 1)
+        
+        layout.addLayout(plot_layout)
+        
+        return widget
+    
+    # ========================================================================
+    # CALLBACKS (DUMMY-IMPLEMENTIERUNG)
+    # ========================================================================
+    
+    def browse_path(self):
+        """Wählt Dateipfad aus"""
+        path = QFileDialog.getExistingDirectory(self, "Speicherort wählen")
+        if path:
+            self.edit_path.setText(path)
+    
+    def start_measurement(self):
+        """Startet Messung (DUMMY - zeigt nur Demo-Plots)"""
+        print("\n" + "="*70)
+        print("▶️  MESSUNG GESTARTET (DUMMY-MODE)")
+        print("="*70)
+        
+        # Parameter auslesen und anzeigen
+        params = self.get_parameters()
+        print("\n📋 Parameter:")
+        for key, value in params.items():
+            print(f"   {key}: {value}")
+        
+        # GUI-Status
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+        self.label_status.setText("🔴 MESSUNG LÄUFT")
+        self.label_status.setStyleSheet(
+            "background: #4CAF50; color: white; padding: 10px; "
+            "border-radius: 5px; font-size: 12pt; font-weight: bold;"
+        )
+        
+        # DUMMY: Zeige Demo-Plots
+        self.plot_dummy_data()
+        
+        print("\n✅ Demo-Plots generiert!")
+        print("   (Echte Messung wird später implementiert)")
+    
+    def stop_measurement(self):
+        """Stoppt Messung"""
+        print("\n⏹ Messung gestoppt")
+        
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
+        self.label_status.setText("⚪ Bereit")
+        self.label_status.setStyleSheet(
+            "background: #f0f0f0; padding: 10px; "
+            "border-radius: 5px; font-size: 12pt; font-weight: bold;"
+        )
+    
+    def get_parameters(self):
+        """Holt alle Parameter aus der GUI"""
+        return {
+            'Messungsname': self.edit_name.text(),
+            'Sensitivität': f"{self.spin_sensitivity.value()} V/g",
+            'Dateipfad': self.edit_path.text(),
+            'Channels': self.edit_channels.text(),
+            'Scan Rate': f"{self.spin_scanrate.value()} Hz",
+            'Number of Scans': self.spin_nscans.value(),
+            'Sample Mode': self.combo_samplemode.currentText(),
+            'Sensorabstand Vertikal': f"{self.spin_dist_vert.value()} mm",
+            'Sensorabstand Horizontal': f"{self.spin_dist_horiz.value()} mm",
+            'Coupling': self.combo_coupling.currentText(),
+            'Terminal Config': self.combo_terminal.currentText(),
+            'Time Limit': f"{self.spin_timelimit.value()} s"
+        }
+    
+    # ========================================================================
+    # DUMMY-PLOTS (für Testen ohne Hardware)
+    # ========================================================================
+    
+    def plot_dummy_data(self):
+        """Generiert Dummy-Plots mit realistischen Daten"""
+        
+        # Zeitachse
+        t = np.linspace(0, 1, 1000)
+        
+        # Frequenzachse
+        freq = np.linspace(0, 500, 1000)
+        
+        # === PLOT 1: Eingang A/D ===
+        self.canvas_eingang.axes.clear()
+        self.canvas_eingang.axes.set_title("Eingang A/D (Hammer + Acc 1-3)", fontweight='bold')
+        
+        # Kanal 0: Hammer (kurzer Impuls)
+        hammer = np.zeros_like(t)
+        hammer[100:150] = 10 * np.exp(-20 * (t[100:150] - t[100]))
+        self.canvas_eingang.axes.plot(t, hammer, 'r-', lw=2, label='Kanal 0: Hammer')
+        
+        # Kanal 1-3: Accelerometer (gedämpfte Schwingung)
+        for i in range(1, 4):
+            freq_osc = 50 + i * 20
+            acc = 5 * np.exp(-2 * t) * np.sin(2 * np.pi * freq_osc * t)
+            acc[:100] = 0  # Vor Hammer: keine Schwingung
+            self.canvas_eingang.axes.plot(t, acc, lw=1.5, label=f'Acc {i}')
+        
+        self.canvas_eingang.axes.set_xlabel("Zeit [s]")
+        self.canvas_eingang.axes.set_ylabel("Amplitude [g/N]")
+        self.canvas_eingang.axes.legend(loc='upper right')
+        self.canvas_eingang.axes.grid(True, alpha=0.3)
+        self.canvas_eingang.draw()
+        
+        # === PLOT 2: Kohärenz ===
+        self.canvas_coherence.axes.clear()
+        self.canvas_coherence.axes.set_title("Kohärenz (Acc 1-3)", fontweight='bold')
+        
+        for i in range(1, 4):
+            # Kohärenz: hohe Werte (0.9-1.0)
+            coh = 0.85 + 0.1 * np.random.random(len(freq))
+            coh = np.clip(coh, 0, 1)
+            self.canvas_coherence.axes.plot(freq, coh, lw=1.5, label=f'Acc {i}')
+        
+        self.canvas_coherence.axes.axhline(y=0.9, color='r', linestyle='--', 
+                                          lw=1, alpha=0.5, label='Gut (>0.9)')
+        self.canvas_coherence.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_coherence.axes.set_ylabel("Kohärenz")
+        self.canvas_coherence.axes.set_ylim(0, 1.1)
+        self.canvas_coherence.axes.legend(loc='lower right')
+        self.canvas_coherence.axes.grid(True, alpha=0.3)
+        self.canvas_coherence.draw()
+        
+        # === PLOT 3: Übertragungsfunktion (FRF) ===
+        self.canvas_frf.axes.clear()
+        self.canvas_frf.axes.set_title("Übertragungsfunktion g/N (Acc 1-3)", fontweight='bold')
+        
+        for i in range(1, 4):
+            # FRF: Resonanz-Peaks
+            frf = 0.1 + 0.5 / (1 + ((freq - (100 + i * 50)) / 20)**2)
+            self.canvas_frf.axes.plot(freq, frf, lw=1.5, label=f'Acc {i}')
+        
+        self.canvas_frf.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_frf.axes.set_ylabel("FRF [g/N]")
+        self.canvas_frf.axes.legend(loc='upper right')
+        self.canvas_frf.axes.grid(True, alpha=0.3)
+        self.canvas_frf.draw()
+        
+        # === PLOT 4: Kippwinkel ===
+        self.canvas_kippwinkel.axes.clear()
+        self.canvas_kippwinkel.axes.set_title("Relativer Kippwinkel", fontweight='bold')
+        
+        # Winkel Gesamt
+        winkel_gesamt = 2 * np.sin(2 * np.pi * freq / 500) + 0.5 * np.random.random(len(freq))
+        self.canvas_kippwinkel.axes.plot(freq, winkel_gesamt, 'b-', lw=2, label='Gesamt')
+        
+        # Winkel Vertikal
+        winkel_vert = 1.5 * np.sin(2 * np.pi * freq / 300)
+        self.canvas_kippwinkel.axes.plot(freq, winkel_vert, 'g-', lw=1.5, label='Vertikal')
+        
+        # Winkel Horizontal
+        winkel_horiz = 1.0 * np.cos(2 * np.pi * freq / 400)
+        self.canvas_kippwinkel.axes.plot(freq, winkel_horiz, 'r-', lw=1.5, label='Horizontal')
+        
+        self.canvas_kippwinkel.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_kippwinkel.axes.set_ylabel("Winkel [°]")
+        self.canvas_kippwinkel.axes.legend(loc='upper right')
+        self.canvas_kippwinkel.axes.grid(True, alpha=0.3)
+        self.canvas_kippwinkel.draw()
+        
+        # === PLOT 5: Amplitude ===
+        self.canvas_amplitude.axes.clear()
+        self.canvas_amplitude.axes.set_title("Amplitude", fontweight='bold')
+        
+        for i in range(1, 4):
+            amp = 1 / (1 + ((freq - (80 + i * 40)) / 30)**2)
+            self.canvas_amplitude.axes.plot(freq, amp, lw=1.5, label=f'Acc {i}')
+        
+        self.canvas_amplitude.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_amplitude.axes.set_ylabel("Amplitude")
+        self.canvas_amplitude.axes.legend(loc='upper right')
+        self.canvas_amplitude.axes.grid(True, alpha=0.3)
+        self.canvas_amplitude.draw()
+        
+        # === PLOT 6: Phase ===
+        self.canvas_phase.axes.clear()
+        self.canvas_phase.axes.set_title("Phase", fontweight='bold')
+        
+        for i in range(1, 4):
+            phase = 180 * np.sin(2 * np.pi * freq / (200 + i * 50))
+            self.canvas_phase.axes.plot(freq, phase, lw=1.5, label=f'Acc {i}')
+        
+        self.canvas_phase.axes.axhline(y=0, color='k', linestyle='--', lw=0.5, alpha=0.3)
+        self.canvas_phase.axes.set_xlabel("Frequenz [Hz]")
+        self.canvas_phase.axes.set_ylabel("Phase [°]")
+        self.canvas_phase.axes.legend(loc='upper right')
+        self.canvas_phase.axes.grid(True, alpha=0.3)
+        self.canvas_phase.draw()
+
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+def main():
+    """Startet die Anwendung"""
+    app = QApplication(sys.argv)
+    app.setStyle('Fusion')  # Moderner Look
+    
+    window = HammerLabViewGUI()
+    window.show()
+    
+    print("\n" + "="*70)
+    print("🔨 GUI GESTARTET")
+    print("="*70)
+    print("\n💡 HINWEISE:")
+    print("   • Alle Parameter sind einstellbar")
+    print("   • 'Messung starten' zeigt Demo-Plots")
+    print("   • Echte Hardware-Logik kommt später")
+    print("\n✅ Bereit!")
+    
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
